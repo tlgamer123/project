@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEON SNAKE — 2026 Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05060f;
+    --neon-cyan:#00f5ff;
+    --neon-pink:#ff2e97;
+    --neon-purple:#a855f7;
+    --neon-green:#39ff14;
+    --glass:rgba(255,255,255,.04);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 70% -10%, #141b3d 0%, var(--bg) 55%),
+               radial-gradient(900px 600px at 10% 110%, #1b0f33 0%, transparent 60%);
+    color:#e6ecff;
+    font-family:'Rajdhani',system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;overflow:hidden;user-select:none;
+  }
+  /* animated background grid */
+  .bg-grid{
+    position:fixed;inset:-40px;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(0,245,255,.06) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(0,245,255,.06) 1px,transparent 1px);
+    background-size:44px 44px;
+    transform:perspective(600px) rotateX(58deg) translateY(0);
+    mask-image:radial-gradient(closest-side,#000 30%,transparent 80%);
+    animation:gridmove 9s linear infinite;opacity:.5;
+  }
+  @keyframes gridmove{to{background-position:0 44px,0 0}}
+  .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;filter:blur(70px);opacity:.35}
+  .aurora span{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:float 14s ease-in-out infinite}
+  .aurora span:nth-child(1){width:420px;height:420px;background:#00f5ff;left:-6%;top:-8%}
+  .aurora span:nth-child(2){width:380px;height:380px;background:#ff2e97;right:-6%;bottom:-10%;animation-delay:-4s}
+  .aurora span:nth-child(3){width:300px;height:300px;background:#a855f7;left:55%;top:60%;animation-delay:-8s}
+  @keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-40px)}}
+
+  .wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px}
+  h1{
+    font-family:'Orbitron',sans-serif;font-weight:900;letter-spacing:.22em;
+    font-size:clamp(22px,4vw,38px);
+    background:linear-gradient(90deg,var(--neon-cyan),var(--neon-purple),var(--neon-pink));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 30px rgba(0,245,255,.25);
+    filter:drop-shadow(0 0 14px rgba(168,85,247,.35));
+  }
+  h1 small{display:block;font-size:11px;letter-spacing:.5em;color:#8ea0c9;-webkit-text-fill-color:#8ea0c9;margin-top:4px}
+
+  .hud{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px}
+  .chip{
+    background:var(--glass);border:1px solid rgba(255,255,255,.08);
+    padding:8px 16px;border-radius:12px;backdrop-filter:blur(8px);
+    display:flex;align-items:baseline;gap:8px;min-width:96px;justify-content:center;
+    box-shadow:inset 0 0 20px rgba(0,245,255,.05);
+  }
+  .chip b{font-family:'Orbitron';font-size:20px;color:var(--neon-cyan);text-shadow:0 0 12px var(--neon-cyan)}
+  .chip#best b{color:var(--neon-pink);text-shadow:0 0 12px var(--neon-pink)}
+  .chip#speed b{color:var(--neon-purple);text-shadow:0 0 12px var(--neon-purple)}
+  .chip label{font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:#7f92bd}
+
+  .stage{position:relative;border-radius:18px;overflow:hidden;
+    border:1px solid rgba(0,245,255,.25);
+    box-shadow:0 0 0 1px rgba(255,255,255,.03),0 0 60px rgba(0,245,255,.12),0 30px 80px rgba(0,0,0,.6);}
+  canvas{display:block;background:#070a18}
+
+  .overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    background:rgba(5,6,15,.72);backdrop-filter:blur(10px);text-align:center;padding:20px;
+    transition:opacity .35s ease,visibility .35s;
+  }
+  .overlay.hidden{opacity:0;visibility:hidden}
+  .overlay h2{font-family:'Orbitron';font-size:clamp(24px,5vw,42px);letter-spacing:.12em;
+    color:#fff;text-shadow:0 0 24px var(--neon-cyan)}
+  .overlay p{color:#9fb0d8;max-width:42ch;line-height:1.5}
+  .overlay .score-final{font-family:'Orbitron';font-size:56px;color:var(--neon-pink);text-shadow:0 0 30px var(--neon-pink)}
+  button{
+    font-family:'Orbitron';font-size:15px;letter-spacing:.2em;text-transform:uppercase;
+    padding:14px 34px;border-radius:999px;border:none;cursor:pointer;color:#03050c;font-weight:700;
+    background:linear-gradient(90deg,var(--neon-cyan),var(--neon-green));
+    box-shadow:0 0 24px rgba(0,245,255,.5),0 0 60px rgba(57,255,20,.25);
+    transition:transform .15s ease,box-shadow .15s ease;
+  }
+  button:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 34px rgba(0,245,255,.8),0 0 80px rgba(57,255,20,.4)}
+  button:active{transform:scale(.97)}
+  .keys{display:flex;gap:6px;align-items:center;color:#7f92bd;font-size:13px;margin-top:6px}
+  kbd{background:#12172c;border:1px solid #2a3352;border-bottom-width:3px;border-radius:6px;padding:2px 8px;font-family:'Orbitron';font-size:11px;color:#cfe0ff}
+
+  .touch{display:none;gap:10px;margin-top:4px}
+  .touch button{padding:14px 22px;font-size:18px;background:#121a33;color:var(--neon-cyan);box-shadow:none;border:1px solid rgba(0,245,255,.3)}
+  @media (hover:none) and (pointer:coarse){.touch{display:flex}}
+
+  footer{color:#5a6b94;font-size:12px;letter-spacing:.15em}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="aurora"><span></span><span></span><span></span></div>
+
+<div class="wrap">
+  <h1>NEON SNAKE<small>FLUX · 2026 EDITION</small></h1>
+
+  <div class="hud">
+    <div class="chip"><label>Score</label><b id="score">0</b></div>
+    <div class="chip" id="best"><label>Best</label><b id="bestVal">0</b></div>
+    <div class="chip" id="speed"><label>Speed</label><b id="speedVal">1.0x</b></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game" width="600" height="600"></canvas>
+    <div class="overlay" id="startScreen">
+      <h2>PRESS START</h2>
+      <p>Eat the pulsing orbs, avoid your own glowing trail and the walls. Every orb speeds you up.</p>
+      <button id="startBtn">Start Game</button>
+      <div class="keys"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>P</kbd> pause</div>
+    </div>
+    <div class="overlay hidden" id="gameOverScreen">
+      <h2 style="color:var(--neon-pink);text-shadow:0 0 24px var(--neon-pink)">GAME OVER</h2>
+      <div class="score-final" id="finalScore">0</div>
+      <p id="newBestMsg" style="color:var(--neon-green);display:none">★ NEW HIGH SCORE ★</p>
+      <button id="restartBtn">Play Again</button>
+    </div>
+    <div class="overlay hidden" id="pauseScreen"><h2>PAUSED</h2><p>Press <kbd>P</kbd> to resume</p></div>
+  </div>
+
+  <div class="touch">
+    <button data-dir="left">◀</button><button data-dir="up">▲</button><button data-dir="down">▼</button><button data-dir="right">▶</button>
+  </div>
+  <footer>BUILT WITH CANVAS · NEON GLOW · PARTICLES</footer>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const GRID = 24;                       // cells per row/col
+  const CELL = canvas.width / GRID;      // px per cell
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('bestVal');
+  const speedEl = document.getElementById('speedVal');
+  const finalEl = document.getElementById('finalScore');
+  const startScreen = document.getElementById('startScreen');
+  const overScreen = document.getElementById('gameOverScreen');
+  const pauseScreen = document.getElementById('pauseScreen');
+  const newBestMsg = document.getElementById('newBestMsg');
+
+  let snake, dir, nextDir, food, particles, trail, score, best, running, paused, dead;
+  let stepTime, lastStep, lastFrame, hueShift, pulse, shake, flash;
+
+  best = +localStorage.getItem('neonSnakeBest') || 0;
+  bestEl.textContent = best;
+
+  function reset() {
+    const mid = Math.floor(GRID / 2);
+    snake = [{x:mid,y:mid},{x:mid-1,y:mid},{x:mid-2,y:mid}];
+    dir = {x:1,y:0}; nextDir = dir;
+    score = 0; stepTime = 130; lastStep = 0; hueShift = 0; pulse = 0;
+    particles = []; trail = []; shake = 0; flash = 0;
+    dead = false; paused = false; running = true;
+    placeFood();
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  function placeFood() {
+    do {
+      food = {x:(Math.random()*GRID)|0, y:(Math.random()*GRID)|0};
+    } while (snake.some(s => s.x === food.x && s.y === food.y));
+    food.born = performance.now();
+  }
+
+  function updateHud() {
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    speedEl.textContent = (130 / stepTime).toFixed(1) + 'x';
+  }
+
+  function spawnBurst(x, y, color, n = 18, spd = 3) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = (0.4 + Math.random()) * spd;
+      particles.push({ x, y, vx: Math.cos(a)*v, vy: Math.sin(a)*v, life: 1, decay: 0.015+Math.random()*0.025, size: 2+Math.random()*3, color });
+    }
+  }
+
+  function step() {
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    // wall collision
+    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) return die(head);
+    // self collision
+    if (snake.some(s => s.x === head.x && s.y === head.y)) return die(head);
+
+    snake.unshift(head);
+    trail.push({ x: head.x, y: head.y, life: 1 });
+
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      stepTime = Math.max(55, stepTime - 4);
+      spawnBurst((food.x+.5)*CELL, (food.y+.5)*CELL, `hsl(${(pulse*40)%360},100%,60%)`, 26, 4);
+      shake = 8; flash = 0.35;
+      placeFood();
+      if (score > best) { best = score; localStorage.setItem('neonSnakeBest', best); }
+      updateHud();
+    } else {
+      snake.pop();
+    }
+  }
+
+  function die(head) {
+    running = false; dead = true;
+    spawnBurst(Math.min(Math.max(head.x,0),GRID-1)*CELL+CELL/2, Math.min(Math.max(head.y,0),GRID-1)*CELL+CELL/2, '#ff2e97', 40, 5);
+    shake = 16;
+    finalEl.textContent = score;
+    newBestMsg.style.display = (score >= best && score > 0) ? 'block' : 'none';
+    setTimeout(() => overScreen.classList.remove('hidden'), 450);
+  }
+
+  // ---------- rendering ----------
+  function drawBoard(t) {
+    ctx.fillStyle = '#070a18';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // subtle checker
+    ctx.fillStyle = 'rgba(255,255,255,0.015)';
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++)
+        if ((x + y) % 2 === 0) ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
+
+    // moving scanline glow
+    const sy = (t * 0.05) % canvas.height;
+    const grad = ctx.createLinearGradient(0, sy-60, 0, sy+60);
+    grad.addColorStop(0,'rgba(0,245,255,0)');
+    grad.addColorStop(.5,'rgba(0,245,255,0.04)');
+    grad.addColorStop(1,'rgba(0,245,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, sy-60, canvas.width, 120);
+
+    // vignette border
+    ctx.strokeStyle = 'rgba(0,245,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 18;
+    ctx.strokeRect(1, 1, canvas.width-2, canvas.height-2);
+    ctx.shadowBlur = 0;
+  }
+
+  function drawFood(t) {
+    const cx = (food.x+.5)*CELL, cy = (food.y+.5)*CELL;
+    const r = CELL*0.34 + Math.sin(t/180)*3;
+    const hue = (t/12) % 360;
+    // outer halo
+    const g = ctx.createRadialGradient(cx,cy,1,cx,cy,r*3.2);
+    g.addColorStop(0,`hsla(${hue},100%,70%,.9)`);
+    g.addColorStop(.4,`hsla(${hue},100%,60%,.25)`);
+    g.addColorStop(1,'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx,cy,r*3.2,0,7); ctx.fill();
+    // core
+    ctx.fillStyle = `hsl(${hue},100%,72%)`;
+    ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur = 22;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.shadowBlur = 0;
+    // rotating ring
+    ctx.strokeStyle = `hsla(${hue},100%,80%,.7)`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,6]);
+    ctx.lineDashOffset = t/40;
+    ctx.beginPath(); ctx.arc(cx,cy,r+6+Math.sin(t/200)*2,0,7); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+  function drawSnake(t) {
+    // fading trail ghosts
+    for (const tr of trail) {
+      ctx.fillStyle = `rgba(0,245,255,${tr.life*0.06})`;
+      roundRect(tr.x*CELL+2, tr.y*CELL+2, CELL-4, CELL-4, 6); ctx.fill();
+      tr.life -= 0.04;
+    }
+    trail = trail.filter(tr => tr.life > 0);
+
+    const n = snake.length;
+    for (let i = n-1; i >= 0; i--) {
+      const s = snake[i];
+      const p = i / n;
+      const hue = (140 + p*90 + Math.sin(t/500)*20) % 360;   // green → cyan gradient along body
+      const x = s.x*CELL, y = s.y*CELL;
+      const pad = 2 + p*1.5;
+      ctx.shadowColor = `hsl(${hue},100%,55%)`;
+      ctx.shadowBlur = i === 0 ? 26 : 14;
+      const grad = ctx.createLinearGradient(x,y,x+CELL,y+CELL);
+      grad.addColorStop(0,`hsl(${hue},100%,${i===0?68:58}%)`);
+      grad.addColorStop(1,`hsl(${(hue+30)%360},100%,42%)`);
+      ctx.fillStyle = grad;
+      roundRect(x+pad, y+pad, CELL-pad*2, CELL-pad*2, i===0?10:7);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // inner highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(x+pad+2, y+pad+2, CELL-pad*2-4, (CELL-pad*2)/2.6, 5); ctx.fill();
+    }
+
+    // eyes on head
+    const h = snake[0];
+    const hx = (h.x+.5)*CELL, hy = (h.y+.5)*CELL;
+    const ex = dir.x*3, ey = dir.y*3;
+    const perp = {x:-dir.y, y:dir.x};
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor='#fff'; ctx.shadowBlur=8;
+    for (const side of [-1,1]) {
+      ctx.beginPath();
+      ctx.arc(hx+ex+perp.x*5*side, hy+ey+perp.y*5*side, 3.2, 0, 7);
+      ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#0a0f1f';
+    for (const side of [-1,1]) {
+      ctx.beginPath();
+      ctx.arc(hx+ex*1.6+perp.x*5*side, hy+ey*1.6+perp.y*5*side, 1.6, 0, 7);
+      ctx.fill();
+    }
+  }
+
+  function drawParticles(dt) {
+    for (const pt of particles) {
+      pt.x += pt.vx * dt/16; pt.y += pt.vy * dt/16;
+      pt.vx *= 0.96; pt.vy *= 0.96;
+      pt.life -= pt.decay;
+      if (pt.life <= 0) continue;
+      ctx.globalAlpha = pt.life;
+      ctx.fillStyle = pt.color;
+      ctx.shadowColor = pt.color; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size*pt.life, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    particles = particles.filter(p => p.life > 0);
+  }
+
+  // ---------- main loop ----------
+  let rafId = null;
+  function loop(t) {
+    const dt = Math.min(50, t - (lastFrame || t));
+    lastFrame = t;
+    pulse = t;
+
+    if (running && !paused) {
+      if (t - lastStep > stepTime) { step(); lastStep = t; }
+    }
+
+    // screen shake
+    ctx.save();
+    if (shake > 0) {
+      ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+      shake *= 0.85; if (shake < 0.5) shake = 0;
+    }
+
+    drawBoard(t);
+    drawFood(t);
+    drawSnake(t);
+    drawParticles(dt);
+
+    // eat flash
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(57,255,20,${flash})`;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      flash -= 0.03;
+    }
+    ctx.restore();
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ---------- input ----------
+  const DIRS = {
+    ArrowUp:{x:0,y:-1}, ArrowDown:{x:0,y:1}, ArrowLeft:{x:-1,y:0}, ArrowRight:{x:1,y:0},
+    KeyW:{x:0,y:-1}, KeyS:{x:0,y:1}, KeyA:{x:-1,y:0}, KeyD:{x:1,y:0}
+  };
+  window.addEventListener('keydown', e => {
+    if (DIRS[e.code] && running && !paused) {
+      const d = DIRS[e.code];
+      if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;   // block instant reversal
+      e.preventDefault();
+    }
+    if (e.code === 'KeyP' && running) { paused = !paused; pauseScreen.classList.toggle('hidden', !paused); }
+    if (e.code === 'Space' && !running && !dead) { start(); }
+  });
+
+  // touch buttons
+  document.querySelectorAll('.touch button').forEach(b => {
+    b.addEventListener('click', () => {
+      const map = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+      const d = map[b.dataset.dir];
+      if (d && running && (d.x !== -dir.x || d.y !== -dir.y)) nextDir = d;
+    });
+  });
+
+  // swipe controls
+  let sx, sy;
+  canvas.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, {passive:true});
+  canvas.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    const d = Math.abs(dx) > Math.abs(dy) ? {x:Math.sign(dx),y:0} : {x:0,y:Math.sign(dy)};
+    if (running && (d.x !== -dir.x || d.y !== -dir.y)) nextDir = d;
+  }, {passive:true});
+
+  function start() {
+    startScreen.classList.add('hidden');
+    overScreen.classList.add('hidden');
+    pauseScreen.classList.add('hidden');
+    reset();
+  }
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('restartBtn').addEventListener('click', start);
+
+  // idle demo board behind start screen
+  snake=[{x:12,y:12}]; dir={x:1,y:0}; nextDir=dir; food={x:5,y:5,born:0};
+  particles=[]; trail=[]; score=0; stepTime=130; lastStep=0; hueShift=0; pulse=0; shake=0; flash=0;
+  running=false; paused=false; dead=false;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
