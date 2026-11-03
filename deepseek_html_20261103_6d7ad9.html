@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Negative → Positive Film Converter</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.0/index.css');
+  body { font-family: 'Inter', sans-serif; background: #0a0a0f; color: #e5e7eb; }
+  .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+  .drop-zone { transition: all 0.3s ease; }
+  .drop-zone.dragover { border-color: #a78bfa; background: rgba(167,139,250,0.08); transform: scale(1.01); }
+  .slider { -webkit-appearance: none; appearance: none; height: 6px; background: rgba(255,255,255,0.1); border-radius: 999px; outline: none; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #a78bfa; cursor: pointer; box-shadow: 0 0 12px rgba(167,139,250,0.6); }
+  .slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #a78bfa; cursor: pointer; border: none; }
+  .thumb-card { transition: all 0.25s ease; }
+  .thumb-card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(167,139,250,0.2); }
+  .pulse-ring { animation: pulseRing 2s infinite; }
+  @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(167,139,250,0.5); } 70% { box-shadow: 0 0 0 14px rgba(167,139,250,0); } 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); } }
+  .progress-fill { transition: width 0.3s ease; }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .compare-slider { position: relative; overflow: hidden; touch-action: pan-y; user-select: none; }
+  .compare-handle { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #fff; cursor: ew-resize; box-shadow: 0 0 10px rgba(0,0,0,0.6); z-index: 10; }
+  .compare-handle::after { content: '⟷'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; color: #000; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .badge { background: linear-gradient(135deg, #a78bfa, #ec4899); }
+  .btn-primary { background: linear-gradient(135deg, #8b5cf6, #ec4899); transition: all 0.2s; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(139,92,246,0.4); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .preset-btn.active { background: rgba(167,139,250,0.35); box-shadow: inset 0 0 0 1px rgba(167,139,250,0.6); }
+  .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-white/10 backdrop-blur-xl sticky top-0 z-40 bg-black/40">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl badge flex items-center justify-center text-white font-bold text-lg pulse-ring">◐</div>
+      <div>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Negative → Positive</h1>
+        <p class="text-xs text-white/50">Film Negative Color Restoration Tool</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-white/50 hidden sm:inline">Up to 20 images · Batch processing</span>
+      <button id="clearAllBtn" class="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10 transition">Clear All</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+
+  <!-- LEFT: Upload + Preview -->
+  <section class="space-y-6">
+
+    <!-- Drop Zone -->
+    <div id="dropZone" class="drop-zone glass rounded-2xl p-8 border-2 border-dashed border-white/15 text-center cursor-pointer">
+      <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+      <div class="flex flex-col items-center gap-3">
+        <div class="w-16 h-16 rounded-2xl badge flex items-center justify-center text-white text-2xl">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div>
+          <p class="text-lg font-semibold">Drop film negatives here</p>
+          <p class="text-sm text-white/50 mt-1">or click to browse · JPG / PNG · Max 20 images</p>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <span class="text-xs px-2 py-1 rounded glass">Single</span>
+          <span class="text-xs px-2 py-1 rounded glass">Batch</span>
+          <span class="text-xs px-2 py-1 rounded glass">Auto orange-mask removal</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div id="progressWrap" class="hidden">
+      <div class="flex justify-between text-xs text-white/60 mb-1.5">
+        <span id="progressLabel">Processing…</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div id="progressBar" class="progress-fill h-full badge" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Preview Stage -->
+    <div id="previewStage" class="hidden">
+      <div class="glass rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3 gap-3">
+          <div class="min-w-0">
+            <h2 class="font-semibold">Preview</h2>
+            <p id="previewInfo" class="text-xs text-white/50 truncate"></p>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button id="compareBtn" class="text-xs px-3 py-1.5 rounded-lg glass hover:bg-white/10">View: Split</button>
+            <button id="downloadCurrentBtn" class="text-xs px-3 py-1.5 rounded-lg btn-primary text-white">Download</button>
+          </div>
+        </div>
+        <div id="compareContainer" class="compare-slider rounded-xl bg-black/60 relative" style="height: min(70vh, 520px);">
+          <canvas id="resultCanvas" class="absolute"></canvas>
+          <canvas id="originalCanvas" class="absolute"></canvas>
+          <div id="compareHandle" class="compare-handle" style="left:50%"></div>
+          <div class="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded bg-black/60 text-white/80 z-20">Original</div>
+          <div class="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded bg-black/60 text-white/80 z-20">Converted</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thumbnails Grid -->
+    <div id="thumbSection" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold">Batch Queue <span id="queueCount" class="text-sm text-white/50 font-normal"></span></h2>
+        <button id="downloadAllBtn" class="text-xs px-3 py-1.5 rounded-lg btn-primary text-white">Download All (ZIP)</button>
+      </div>
+      <div id="thumbGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[420px] overflow-y-auto scroll-thin pr-1"></div>
+    </div>
+
+  </section>
+
+  <!-- RIGHT: Controls -->
+  <aside class="space-y-4">
+    <div class="glass rounded-2xl p-5 space-y-5">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">Adjustments</h2>
+        <button id="resetBtn" class="text-xs text-white/60 hover:text-white">Reset</button>
+      </div>
+
+      <!-- Preset -->
+      <div>
+        <label class="text-xs text-white/60 mb-1.5 block">Film Preset</label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-preset="auto" class="preset-btn active text-xs py-1.5 rounded-lg bg-white/10 hover:bg-white/15">Auto</button>
+          <button data-preset="color" class="preset-btn text-xs py-1.5 rounded-lg bg-white/10 hover:bg-white/15">Color</button>
+          <button data-preset="bw" class="preset-btn text-xs py-1.5 rounded-lg bg-white/10 hover:bg-white/15">B&W</button>
+        </div>
+      </div>
+
+      <!-- Sliders -->
+      <div class="space-y-3.5">
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Invert</span><span id="valInvert" class="text-white/50">100%</span></div>
+          <input id="slInvert" type="range" min="0" max="100" value="100" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Orange Mask Removal</span><span id="valMask" class="text-white/50">100%</span></div>
+          <input id="slMask" type="range" min="0" max="100" value="100" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Auto Levels</span><span id="valLevels" class="text-white/50">100%</span></div>
+          <input id="slLevels" type="range" min="0" max="100" value="100" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Color Temperature</span><span id="valTemp" class="text-white/50">0</span></div>
+          <input id="slTemp" type="range" min="-100" max="100" value="0" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Tint (Green↔Magenta)</span><span id="valTint" class="text-white/50">0</span></div>
+          <input id="slTint" type="range" min="-100" max="100" value="0" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Contrast</span><span id="valContrast" class="text-white/50">0</span></div>
+          <input id="slContrast" type="range" min="-100" max="100" value="0" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Brightness</span><span id="valBright" class="text-white/50">0</span></div>
+          <input id="slBright" type="range" min="-100" max="100" value="0" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Saturation</span><span id="valSat" class="text-white/50">100%</span></div>
+          <input id="slSat" type="range" min="0" max="200" value="100" class="slider w-full" />
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1"><span class="text-white/70">Gamma</span><span id="valGamma" class="text-white/50">1.00</span></div>
+          <input id="slGamma" type="range" min="50" max="200" value="100" class="slider w-full" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="glass rounded-2xl p-5 text-xs text-white/60 space-y-2">
+      <p class="font-semibold text-white/80">How it works</p>
+      <p>1. Inverts every pixel (255 − value)</p>
+      <p>2. Samples per-channel film-base &amp; density percentiles from the image</p>
+      <p>3. Aligns the channels → cancels the orange mask, giving true scene colors</p>
+      <p>4. Auto-levels + gamma + tone controls for a natural photo</p>
+      <p class="text-white/40 pt-1">Tip: lower "Orange Mask Removal" if a strongly coloured scene (sunset, foliage) loses its mood.</p>
+    </div>
+  </aside>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* =========================================================
+   CONSTANTS & STATE
+   ========================================================= */
+const MAX_IMAGES   = 20;
+const PREVIEW_SIDE = 1400;   // px — size used for the live preview
+const THUMB_SIDE   = 256;    // px — size used for thumbnails
+const STATS_SIDE   = 512;    // px — size used for histogram analysis
+
+const DEFAULT_PARAMS = {
+  invert: 100, mask: 100, levels: 100,
+  temp: 0, tint: 0, contrast: 0, bright: 0,
+  sat: 100, gamma: 100
+};
+
+const state = {
+  images: [],          // { id, name, original, preview, thumb, stats }
+  currentId: null,
+  params: { ...DEFAULT_PARAMS },
+  comparePct: 50,
+  viewMode: 'split',   // 'split' | 'result' | 'original'
+  renderedId: null
+};
+
+/* =========================================================
+   DOM + HELPERS
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+const dropZone        = $('dropZone'),        fileInput      = $('fileInput');
+const previewStage    = $('previewStage'),    thumbSection   = $('thumbSection');
+const thumbGrid       = $('thumbGrid');
+const resultCanvas    = $('resultCanvas'),    originalCanvas = $('originalCanvas');
+const compareHandle   = $('compareHandle'),   compareContainer = $('compareContainer');
+const progressWrap    = $('progressWrap'),    progressBar    = $('progressBar');
+const progressPct     = $('progressPct'),     progressLabel  = $('progressLabel');
+
+const scratch = document.createElement('canvas');
+const scratchCtx = scratch.getContext('2d');
+
+function setProgress(pct, label) {
+  progressBar.style.width = clamp(pct, 0, 100) + '%';
+  progressPct.textContent = Math.round(clamp(pct, 0, 100)) + '%';
+  if (label) progressLabel.textContent = label;
+}
+
+/* =========================================================
+   FILE HANDLING
+   ========================================================= */
+dropZone.addEventListener('click', () => fileInput.click());
+['dragenter', 'dragover'].forEach(ev =>
+  dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach(ev =>
+  dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); }));
+dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value = ''; });
+
+async function handleFiles(fileList) {
+  const files = [...fileList].filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
+
+  const room = MAX_IMAGES - state.images.length;
+  if (room <= 0) {
+    alert(`Maximum ${MAX_IMAGES} images reached. Clear the queue to add more.`);
+    return;
+  }
+  if (files.length > room) alert(`Only ${room} more image(s) can be added (limit ${MAX_IMAGES}).`);
+  const batch = files.slice(0, room);
+
+  progressWrap.classList.remove('hidden');
+  for (let i = 0; i < batch.length; i++) {
+    const file = batch[i];
+    setProgress((i / batch.length) * 100, `Loading ${file.name}`);
+    try {
+      const item = await prepareItem(file);
+      state.images.push(item);
+      addThumbnail(item);
+    } catch (err) {
+      console.error('Failed to load', file.name, err);
+    }
+  }
+  setProgress(100, 'Done');
+  setTimeout(() => progressWrap.classList.add('hidden'), 400);
+
+  updateQueueUI();
+  if (!state.currentId && state.images.length) selectImage(state.images[0].id);
+  scheduleThumbnails();
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+    img.src = url;
+  });
+}
+
+/** Downscale any image source to a canvas with a maximum side length. */
+function downscale(source, maxSide) {
+  const w = source.naturalWidth || source.width;
+  const h = source.naturalHeight || source.height;
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width  = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, 0, 0, c.width, c.height);
+  return c;
+}
+
+async function prepareItem(file) {
+  const img = await loadImage(file);
+  return {
+    id: 'img_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+    name: file.name,
+    original: img,                                  // full resolution — used for export
+    preview:  downscale(img, PREVIEW_SIDE),         // live preview
+    thumb:    downscale(img, THUMB_SIDE),           // thumbnail rendering
+    stats:    computeStats(downscale(img, STATS_SIDE))
+  };
+}
+
+/* =========================================================
+   HISTOGRAM ANALYSIS  (computed once per image)
+   ---------------------------------------------------------
+   Works on the *inverted* values, so percentiles map directly
+   to the black / white points of the positive image.
+   ========================================================= */
+function computeStats(source) {
+  const w = source.width, h = source.height;
+  const ctx = source.getContext('2d', { willReadFrequently: true });
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  const hist = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  const n = w * h;
+
+  for (let i = 0; i < data.length; i += 4) {
+    hist[0][255 - data[i]]++;
+    hist[1][255 - data[i + 1]]++;
+    hist[2][255 - data[i + 2]]++;
+  }
+
+  const percentile = (hst, frac) => {
+    const target = n * frac;
+    let acc = 0;
+    for (let v = 0; v < 256; v++) { acc += hst[v]; if (acc >= target) return v; }
+    return 255;
+  };
+
+  const lo = [percentile(hist[0], 0.005), percentile(hist[1], 0.005), percentile(hist[2], 0.005)];
+  const hi = [percentile(hist[0], 0.995), percentile(hist[1], 0.995), percentile(hist[2], 0.995)];
+
+  // Guard against flat / degenerate channels
+  for (let c = 0; c < 3; c++) {
+    if (hi[c] - lo[c] < 16) {
+      const mid = (hi[c] + lo[c]) / 2;
+      lo[c] = clamp(mid - 8, 0, 255);
+      hi[c] = clamp(mid + 8, 0, 255);
+    }
+  }
+  return { lo, hi };
+}
+
+/* =========================================================
+   CONVERSION ENGINE
+   ---------------------------------------------------------
+   1. invert
+   2. per-channel black/white-point alignment  → removes the
+      orange mask (strength controlled by `mask`)
+   3. blend against the raw inversion          → `levels`
+   4. temperature / tint / brightness / contrast / gamma / saturation
+   ========================================================= */
+function convertImage(source, params, stats) {
+  const w = source.naturalWidth || source.width;
+  const h = source.naturalHeight || source.height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0, w, h);
+
+  const src = ctx.getImageData(0, 0, w, h);
+  const dst = ctx.createImageData(w, h);
+  const s = src.data, d = dst.data;
+
+  /* ---- pre-compute per-channel mapping ---- */
+  const inv    = params.invert / 100;
+  const mask   = params.mask / 100;
+  const levels = params.levels / 100;
+
+  const lo = stats.lo, hi = stats.hi;
+  const meanLo = (lo[0] + lo[1] + lo[2]) / 3;
+  const meanHi = (hi[0] + hi[1] + hi[2]) / 3;
+
+  const blackR = meanLo + (lo[0] - meanLo) * mask;
+  const blackG = meanLo + (lo[1] - meanLo) * mask;
+  const blackB = meanLo + (lo[2] - meanLo) * mask;
+  const whiteR = meanHi + (hi[0] - meanHi) * mask;
+  const whiteG = meanHi + (hi[1] - meanHi) * mask;
+  const whiteB = meanHi + (hi[2] - meanHi) * mask;
+
+  const gainR = 255 / Math.max(1, whiteR - blackR);
+  const gainG = 255 / Math.max(1, whiteG - blackG);
+  const gainB = 255 / Math.max(1, whiteB - blackB);
+
+  /* ---- tone / colour constants ---- */
+  const temp = params.temp, tint = params.tint;
+  const tempR = temp * 0.6, tempB = -temp * 0.6;
+  const tintR = tint * 0.3, tintG = -tint * 0.4, tintB = tint * 0.3;
+  const brightAdd = params.bright * 0.8;
+
+  const contrast = params.contrast;
+  const cf = contrast !== 0 ? (259 * (contrast + 255)) / (255 * (259 - contrast)) : 1;
+
+  const gamma = params.gamma / 100;
+  const invGamma = 1 / gamma;
+
+  const sat = params.sat / 100;
+
+  /* ---- main loop ---- */
+  for (let i = 0; i < s.length; i += 4) {
+    const sr = s[i], sg = s[i + 1], sb = s[i + 2];
+
+    // 1. invert (blended)
+    let r = 255 - sr, g = 255 - sg, b = 255 - sb;
+    if (inv < 1) {
+      r = r * inv + sr * (1 - inv);
+      g = g * inv + sg * (1 - inv);
+      b = b * inv + sb * (1 - inv);
+    }
+
+    // 2. mask removal / normalisation
+    r = (r - blackR) * gainR;
+    g = (g - blackG) * gainG;
+    b = (b - blackB) * gainB;
+
+    // 3. auto-levels blend (falls back toward the plain inversion)
+    if (levels < 1) {
+      r = r * levels + (255 - sr) * (1 - levels);
+      g = g * levels + (255 - sg) * (1 - levels);
+      b = b * levels + (255 - sb) * (1 - levels);
+    }
+
+    // 4a. temperature + tint
+    r += tempR + tintR;
+    g += tintG;
+    b += tempB + tintB;
+
+    // 4b. brightness
+    r += brightAdd; g += brightAdd; b += brightAdd;
+
+    // 4c. contrast
+    if (cf !== 1) {
+      r = cf * (r - 128) + 128;
+      g = cf * (g - 128) + 128;
+      b = cf * (b - 128) + 128;
+    }
+
+    // 4d. gamma
+    if (gamma !== 1) {
+      r = 255 * Math.pow(clamp(r / 255, 0, 1), invGamma);
+      g = 255 * Math.pow(clamp(g / 255, 0, 1), invGamma);
+      b = 255 * Math.pow(clamp(b / 255, 0, 1), invGamma);
+    }
+
+    // 4e. saturation
+    if (sat !== 1) {
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      r = gray + (r - gray) * sat;
+      g = gray + (g - gray) * sat;
+      b = gray + (b - gray) * sat;
+    }
+
+    // Uint8ClampedArray clamps + rounds automatically
+    d[i]     = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+    d[i + 3] = s[i + 3];
+  }
+
+  return dst;
+}
+
+/* =========================================================
+   THUMBNAILS
+   ========================================================= */
+function addThumbnail(item) {
+  const div = document.createElement('div');
+  div.className = 'thumb-card glass rounded-xl overflow-hidden cursor-pointer fade-in relative';
+  div.dataset.id = item.id;
+  div.innerHTML = `
+    <div class="aspect-square bg-black/40 relative">
+      <canvas data-thumb="${item.id}" class="w-full h-full"></canvas>
+      <button data-remove="${item.id}"
+        class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 hover:bg-red-500/80 text-white/80 hover:text-white text-xs leading-none z-10"
+        title="Remove">✕</button>
+      <div class="absolute top-1 left-1 w-2 h-2 rounded-full bg-green-400"></div>
+    </div>
+    <div class="p-2">
+      <p class="text-[11px] truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</p>
+    </div>`;
+
+  div.addEventListener('click', e => {
+    if (e.target.closest('[data-remove]')) return;
+    selectImage(item.id);
+  });
+  div.querySelector('[data-remove]').addEventListener('click', e => {
+    e.stopPropagation();
+    removeImage(item.id);
+  });
+
+  thumbGrid.appendChild(div);
+  drawThumb(item);
+}
+
+function drawThumb(item) {
+  const c = thumbGrid.querySelector(`canvas[data-thumb="${item.id}"]`);
+  if (!c) return;
+
+  const SIZE = 200;
+  if (c.width !== SIZE) { c.width = SIZE; c.height = SIZE; }
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  const data = convertImage(item.thumb, state.params, item.stats);
+  scratch.width  = item.thumb.width;
+  scratch.height = item.thumb.height;
+  scratchCtx.putImageData(data, 0, 0);
+
+  const scale = Math.min(SIZE / scratch.width, SIZE / scratch.height);
+  const w = scratch.width * scale, h = scratch.height * scale;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(scratch, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+}
+
+let thumbTimer = null;
+function scheduleThumbnails() {
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => state.images.forEach(drawThumb), 250);
+}
+
+function updateQueueUI() {
+  thumbSection.classList.toggle('hidden', state.images.length === 0);
+  $('queueCount').textContent = `(${state.images.length}/${MAX_IMAGES})`;
+  $('downloadAllBtn').disabled = state.images.length === 0;
+}
+
+function removeImage(id) {
+  const idx = state.images.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  state.images.splice(idx, 1);
+
+  const el = thumbGrid.querySelector(`.thumb-card[data-id="${id}"]`);
+  if (el) el.remove();
+
+  if (state.currentId === id) {
+    state.currentId = null;
+    state.renderedId = null;
+    if (state.images.length) selectImage(state.images[0].id);
+    else previewStage.classList.add('hidden');
+  }
+  updateQueueUI();
+}
+
+/* =========================================================
+   SELECTION + RENDER
+   ========================================================= */
+function selectImage(id) {
+  state.currentId = id;
+  thumbGrid.querySelectorAll('.thumb-card').forEach(el => {
+    const on = el.dataset.id === id;
+    el.classList.toggle('ring-2', on);
+    el.classList.toggle('ring-purple-400', on);
+  });
+
+  previewStage.classList.remove('hidden');
+  const item = getCurrent();
+  if (!item) return;
+  $('previewInfo').textContent = item.name;
+
+  render(true);
+  scheduleThumbnails();
+}
+
+function getCurrent() {
+  return state.images.find(x => x.id === state.currentId);
+}
+
+let rafPending = false;
+function scheduleRender() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => {
+    rafPending = false;
+    render(false);
+    scheduleThumbnails();
+  });
+}
+
+function render(force) {
+  const item = getCurrent();
+  if (!item) return;
+
+  // Redraw the "before" canvas only when the selection changes
+  if (force || state.renderedId !== item.id) {
+    originalCanvas.width  = item.preview.width;
+    originalCanvas.height = item.preview.height;
+    originalCanvas.getContext('2d').drawImage(item.preview, 0, 0);
+    state.renderedId = item.id;
+  }
+
+  // Converted result
+  const result = convertImage(item.preview, state.params, item.stats);
+  resultCanvas.width  = result.width;
+  resultCanvas.height = result.height;
+  resultCanvas.getContext('2d').putImageData(result, 0, 0);
+
+  fitCanvases();
+  applyCompare();
+}
+
+function fitCanvases() {
+  const cw = compareContainer.clientWidth;
+  const ch = compareContainer.clientHeight;
+  if (!cw || !ch || !resultCanvas.width) return;
+
+  const iw = resultCanvas.width, ih = resultCanvas.height;
+  const scale = Math.min(cw / iw, ch / ih);
+  const dw = Math.round(iw * scale);
+  const dh = Math.round(ih * scale);
+  const left = Math.round((cw - dw) / 2);
+  const top  = Math.round((ch - dh) / 2);
+
+  [resultCanvas, originalCanvas].forEach(c => {
+    c.style.width  = dw + 'px';
+    c.style.height = dh + 'px';
+    c.style.left   = left + 'px';
+    c.style.top    = top + 'px';
+  });
+}
+
+/* =========================================================
+   COMPARE SLIDER  (correctly aligned to the image box)
+   ========================================================= */
+function applyCompare() {
+  if (state.viewMode === 'result') {
+    originalCanvas.style.display = 'none';
+    compareHandle.style.display = 'none';
+    return;
+  }
+  originalCanvas.style.display = 'block';
+
+  if (state.viewMode === 'original') {
+    originalCanvas.style.clipPath = 'none';
+    compareHandle.style.display = 'none';
+    return;
+  }
+
+  // split mode
+  compareHandle.style.display = 'block';
+  const imgRect = resultCanvas.getBoundingClientRect();
+  const boxRect = compareContainer.getBoundingClientRect();
+  if (!imgRect.width) return;
+
+  const pct = state.comparePct;
+  originalCanvas.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+  compareHandle.style.left = (imgRect.left - boxRect.left + imgRect.width * pct / 100) + 'px';
+}
+
+let dragging = false;
+
+function pointerToPct(clientX) {
+  const imgRect = resultCanvas.getBoundingClientRect();
+  if (!imgRect.width) return state.comparePct;
+  return clamp(((clientX - imgRect.left) / imgRect.width) * 100, 0, 100);
+}
+
+compareContainer.addEventListener('pointerdown', e => {
+  if (state.viewMode !== 'split') return;
+  dragging = true;
+  try { compareContainer.setPointerCapture(e.pointerId); } catch (_) {}
+  state.comparePct = pointerToPct(e.clientX);
+  applyCompare();
+});
+compareContainer.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  state.comparePct = pointerToPct(e.clientX);
+  applyCompare();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
+  compareContainer.addEventListener(ev, e => {
+    if (!dragging) return;
+    dragging = false;
+    try { compareContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+  }));
+
+$('compareBtn').addEventListener('click', () => {
+  const order = ['split', 'result', 'original'];
+  const labels = { split: 'View: Split', result: 'View: Converted', original: 'View: Original' };
+  state.viewMode = order[(order.indexOf(state.viewMode) + 1) % order.length];
+  $('compareBtn').textContent = labels[state.viewMode];
+  applyCompare();
+});
+
+/* =========================================================
+   SLIDERS
+   ========================================================= */
+const SLIDERS = [
+  ['slInvert',   'valInvert',   v => v + '%',            'invert'],
+  ['slMask',     'valMask',     v => v + '%',            'mask'],
+  ['slLevels',   'valLevels',   v => v + '%',            'levels'],
+  ['slTemp',     'valTemp',     v => v,                  'temp'],
+  ['slTint',     'valTint',     v => v,                  'tint'],
+  ['slContrast', 'valContrast', v => v,                  'contrast'],
+  ['slBright',   'valBright',   v => v,                  'bright'],
+  ['slSat',      'valSat',      v => v + '%',            'sat'],
+  ['slGamma',    'valGamma',    v => (v / 100).toFixed(2), 'gamma']
+];
+
+SLIDERS.forEach(([sid, vid, fmt, param]) => {
+  const el = $(sid);
+  el.addEventListener('input', () => {
+    state.params[param] = parseFloat(el.value);
+    $(vid).textContent = fmt(el.value);
+    clearPresetHighlight();
+    scheduleRender();
+  });
+});
+
+function syncSliders() {
+  SLIDERS.forEach(([sid, vid, fmt, param]) => {
+    $(sid).value = state.params[param];
+    $(vid).textContent = fmt(state.params[param]);
+  });
+}
+
+function clearPresetHighlight() {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+/* =========================================================
+   PRESETS
+   ========================================================= */
+const PRESETS = {
+  auto:  { ...DEFAULT_PARAMS },
+  color: { ...DEFAULT_PARAMS, contrast: 14, bright: 4, sat: 115, gamma: 95, temp: -6 },
+  bw:    { ...DEFAULT_PARAMS, contrast: 16, sat: 0 }
+};
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    Object.assign(state.params, PRESETS[btn.dataset.preset]);
+    clearPresetHighlight();
+    btn.classList.add('active');
+    syncSliders();
+    scheduleRender();
+  });
+});
+
+$('resetBtn').addEventListener('click', () => {
+  Object.assign(state.params, DEFAULT_PARAMS);
+  clearPresetHighlight();
+  document.querySelector('.preset-btn[data-preset="auto"]').classList.add('active');
+  syncSliders();
+  scheduleRender();
+});
+
+/* =========================================================
+   DOWNLOAD
+   ========================================================= */
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+$('downloadCurrentBtn').addEventListener('click', () => {
+  const item = getCurrent();
+  if (!item) return;
+  const data = convertImage(item.original, state.params, item.stats);
+  const c = document.createElement('canvas');
+  c.width = data.width; c.height = data.height;
+  c.getContext('2d').putImageData(data, 0, 0);
+  const base = item.name.replace(/\.[^.]+$/, '');
+  c.toBlob(blob => downloadBlob(blob, `positive_${base}.png`), 'image/png');
+});
+
+$('downloadAllBtn').addEventListener('click', async () => {
+  if (!state.images.length) return;
+  const btn = $('downloadAllBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+
+  progressWrap.classList.remove('hidden');
+
+  try {
+    const zip = new JSZip();
+    const used = new Set();
+
+    for (let i = 0; i < state.images.length; i++) {
+      const item = state.images[i];
+      const pct = (i / state.images.length) * 90;
+      setProgress(pct, `Converting ${i + 1} / ${state.images.length}: ${item.name}`);
+      btn.textContent = `Converting ${i + 1}/${state.images.length}…`;
+      await nextFrame();
+
+      const data = convertImage(item.original, state.params, item.stats);
+      const c = document.createElement('canvas');
+      c.width = data.width; c.height = data.height;
+      c.getContext('2d').putImageData(data, 0, 0);
+
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+
+      const base = item.name.replace(/\.[^.]+$/, '');
+      let name = `positive_${base}.png`;
+      let n = 1;
+      while (used.has(name)) name = `positive_${base}_${++n}.png`;
+      used.add(name);
+
+      zip.file(name, blob);
+    }
+
+    setProgress(93, 'Compressing archive…');
+    btn.textContent = 'Compressing…';
+    await nextFrame();
+
+    const content = await zip.generateAsync({ type: 'blob' }, meta => {
+      setProgress(93 + meta.percent * 0.07, 'Compressing archive…');
+    });
+
+    downloadBlob(content, 'positive_conversions.zip');
+    setProgress(100, 'Done');
+  } catch (err) {
+    console.error(err);
+    alert('Export failed: ' + err.message);
+  } finally {
+    setTimeout(() => progressWrap.classList.add('hidden'), 500);
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+
+/* =========================================================
+   CLEAR ALL
+   ========================================================= */
+$('clearAllBtn').addEventListener('click', () => {
+  if (!state.images.length) return;
+  if (!confirm('Clear all images?')) return;
+
+  state.images = [];
+  state.currentId = null;
+  state.renderedId = null;
+  thumbGrid.innerHTML = '';
+  previewStage.classList.add('hidden');
+  updateQueueUI();
+});
+
+/* =========================================================
+   RESIZE
+   ========================================================= */
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.currentId) { fitCanvases(); applyCompare(); }
+  }, 120);
+});
+
+/* =========================================================
+   INIT
+   ========================================================= */
+updateQueueUI();
+syncSliders();
+</script>
+</body>
+</html>
